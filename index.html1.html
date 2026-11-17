@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#060d18">
+<title>GPS-Tacho</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+:root{color-scheme:dark;--bg:#060d18;--glass:rgba(16,28,48,.72);--line:rgba(255,255,255,.12);--fg:#f3f7fc;--mut:#8ea3bb;--a:#19e3c4;--b:#ffd23f;--c:#ff4d6d;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;height:100%;background:radial-gradient(120% 70% at 50% 0%,#12305a 0%,var(--bg) 60%);color:var(--fg);font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;overflow:hidden}
+.app{height:100%;max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:12px;padding:14px 14px 12px}
+.top{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.seg{display:flex;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:3px;backdrop-filter:blur(10px)}
+.seg button{font:inherit;font-size:1.15rem;font-weight:600;color:var(--mut);background:none;border:0;border-radius:999px;padding:7px 18px;cursor:pointer;transition:background .2s,color .2s}
+.seg button[aria-pressed="true"]{background:var(--fg);color:#08162a}
+.stage{position:relative;flex:1;min-height:0;border-radius:24px;overflow:hidden}
+#v-tacho{height:100%;display:flex;align-items:center;justify-content:center}
+#v-map{position:absolute;inset:0;display:none;border:1px solid var(--line);border-radius:24px}
+.gauge{position:relative;width:100%;max-height:100%;aspect-ratio:300/270}
+.gauge svg{width:100%;height:100%;display:block;overflow:visible}
+.glow{filter:drop-shadow(0 0 10px rgba(25,227,196,.55))}
+.arc{transition:stroke-dashoffset .4s cubic-bezier(.2,.8,.2,1)}
+.read{position:absolute;left:0;right:0;top:30%;text-align:center}
+.num{font-size:min(30vw,9.5rem);font-weight:700;line-height:.9;font-variant-numeric:tabular-nums;text-shadow:0 0 30px rgba(25,227,196,.35)}
+.unit{font-size:1.6rem;color:var(--mut);font-weight:500;letter-spacing:.04em}
+.chip{position:absolute;z-index:500;left:12px;top:12px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(10px);border-radius:16px;padding:6px 14px;display:flex;align-items:baseline;gap:6px}
+.chip b{font-size:2.6rem;line-height:1;font-weight:700;font-variant-numeric:tabular-nums}
+.chip span{color:var(--mut);font-size:1.2rem}
+#center{position:absolute;z-index:500;right:12px;bottom:12px;font:inherit;font-size:1.1rem;font-weight:600;color:#08162a;background:var(--fg);border:0;border-radius:999px;padding:8px 16px;display:none;cursor:pointer}
+#layer{position:absolute;z-index:500;right:12px;top:12px;font:inherit;font-size:1.1rem;font-weight:600;color:var(--fg);background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(10px);border-radius:999px;padding:8px 16px;display:none;cursor:pointer}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);background:var(--glass);border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(10px)}
+.stats div{padding:9px 6px;text-align:center}
+.stats div+div{border-left:1px solid var(--line)}
+.stats dt{color:var(--mut);font-size:.95rem}
+.stats dd{margin:0;font-size:1.55rem;font-weight:600;font-variant-numeric:tabular-nums}
+.stats small{font-size:.9rem;color:var(--mut);font-weight:500}
+#msg{margin:0;text-align:center;color:var(--mut);font-size:1.05rem;min-height:1.3em}
+#msg.err{color:var(--c)}
+.row{display:flex;gap:10px}
+.row button{font:inherit;font-size:1.3rem;font-weight:600;border-radius:16px;padding:14px;cursor:pointer;border:1px solid var(--line);color:var(--fg);background:var(--glass)}
+#go{flex:1;border:0;color:#04201b;background:linear-gradient(135deg,var(--a),#7cf2a2)}
+#go.on{color:#fff;background:linear-gradient(135deg,var(--c),#ff8a5c)}
+button:focus-visible{outline:3px solid var(--b);outline-offset:2px}
+.leaflet-container{background:#0a1626;font-family:inherit}
+.leaflet-control-attribution{font-size:9px!important;background:rgba(6,13,24,.6)!important;color:#aab!important}
+.leaflet-control-attribution a{color:#cde!important}
+.rec{display:flex;align-items:baseline;gap:8px;background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:8px 14px;backdrop-filter:blur(10px)}
+.rec span{color:var(--b);font-size:1.05rem;font-weight:600}
+.rec b{font-size:1.7rem;font-weight:700;font-variant-numeric:tabular-nums}
+.rec small{color:var(--mut);font-size:1rem}
+.rec em{flex:1;font-style:normal;color:var(--mut);font-size:.95rem;text-align:right}
+.rec button{font:inherit;font-size:.95rem;color:var(--mut);background:none;border:1px solid var(--line);border-radius:10px;padding:3px 10px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){.arc{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="seg" role="group" aria-label="Ansicht">
+      <button id="t-tacho" aria-pressed="true">Tacho</button>
+      <button id="t-map" aria-pressed="false">Karte</button>
+    </div>
+    <div class="seg" role="group" aria-label="Einheit">
+      <button id="u-kmh" aria-pressed="true">km/h</button>
+      <button id="u-mph" aria-pressed="false">mph</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div id="v-tacho">
+      <div class="gauge">
+        <svg viewBox="0 0 300 270" aria-hidden="true">
+          <defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="260" y2="0">
+            <stop offset="0" stop-color="#19e3c4"/><stop offset=".55" stop-color="#ffd23f"/><stop offset="1" stop-color="#ff4d6d"/>
+          </linearGradient></defs>
+          <path d="M 65.15 234.85 A 120 120 0 1 1 234.85 234.85" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="18" stroke-linecap="round"/>
+          <path d="M 57.7 242.3 A 130.5 130.5 0 1 1 242.3 242.3" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="5" pathLength="100" stroke-dasharray=".35 2.15"/>
+          <g class="glow"><path id="arc" class="arc" d="M 65.15 234.85 A 120 120 0 1 1 234.85 234.85" fill="none" stroke="url(#g)" stroke-width="18" stroke-linecap="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></g>
+        </svg>
+        <div class="read"><div class="num" id="num">0</div><div class="unit" id="unit">km/h</div></div>
+      </div>
+    </div>
+    <div id="v-map"></div>
+    <div class="chip" id="chip" style="display:none"><b id="cnum">0</b><span id="cunit">km/h</span></div>
+    <button id="layer">Straße</button>
+    <button id="center">Zentrieren</button>
+  </div>
+
+  <dl class="stats" style="margin:0">
+    <div><dt>Max</dt><dd><span id="max">0</span></dd></div>
+    <div><dt>Ø</dt><dd><span id="avg">0</span></dd></div>
+    <div><dt>Strecke <small id="du">km</small></dt><dd id="dist">0,00</dd></div>
+    <div><dt>Zeit</dt><dd id="time">00:00</dd></div>
+  </dl>
+  <div class="rec"><span>Rekord</span><b id="rec">0</b><small id="recu">km/h</small><em id="recd"></em><button id="recdel">Löschen</button></div>
+  <p id="msg">Tippe auf „Start“ und erlaube den Standortzugriff.</p>
+  <div class="row">
+    <button id="go">Start</button>
+    <button id="reset">Zurücksetzen</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var unit='kmh',watchId=null,wake=null,follow=true,view='tacho';
+  var S={max:0,dist:0,moving:0,last:null,speed:0};
+  var F={kmh:3.6,mph:2.236936},SCALE={kmh:200,mph:125};
+  var rec={v:0,d:0};
+  try{var raw=localStorage.getItem('tacho_rekord');if(raw){var o=JSON.parse(raw);if(o&&o.v>0&&o.v<=70)rec=o}}catch(e){}
+  function saveRec(){try{localStorage.setItem('tacho_rekord',JSON.stringify(rec))}catch(e){}}
+
+  /* Karte (Satellit) */
+  var map=null,me,acc,track,hasPos=false,satL,labL,osmL,isSat=true;
+  if(window.L){
+    map=L.map('v-map',{zoomControl:false}).setView([51.1,10.4],5);
+    satL=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Bilder © Esri, Maxar, Earthstar Geographics'}).addTo(map);
+    labL=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}).addTo(map);
+    osmL=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap-Mitwirkende'});
+    track=L.polyline([],{color:'#ffd23f',weight:4,opacity:.9}).addTo(map);
+    acc=L.circle([0,0],{radius:1,stroke:false,fillColor:'#19e3c4',fillOpacity:.18});
+    me=L.circleMarker([0,0],{radius:9,color:'#fff',weight:3,fillColor:'#19e3c4',fillOpacity:1});
+    map.on('dragstart',function(){follow=false;$('center').style.display='block'});
+  }
+
+  function setView(v){
+    view=v;
+    $('t-tacho').setAttribute('aria-pressed',v==='tacho');
+    $('t-map').setAttribute('aria-pressed',v==='map');
+    $('v-tacho').style.display=v==='tacho'?'flex':'none';
+    $('v-map').style.display=v==='map'?'block':'none';
+    $('chip').style.display=v==='map'?'flex':'none';
+    $('layer').style.display=v==='map'?'block':'none';
+    $('center').style.display=(v==='map'&&!follow)?'block':'none';
+    if(v==='map'&&map){setTimeout(function(){map.invalidateSize();if(hasPos&&follow)map.setView(me.getLatLng(),Math.max(map.getZoom(),17))},60)}
+  }
+
+  function fmt(ms){return Math.round(ms*F[unit])}
+  function hav(a,b){var R=6371000,r=Math.PI/180,dLa=(b.lat-a.lat)*r,dLo=(b.lon-a.lon)*r;
+    var h=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLo/2)*Math.sin(dLo/2);
+    return 2*R*Math.asin(Math.sqrt(h))}
+  function say(t,err){var m=$('msg');m.textContent=t;m.className=err?'err':''}
+  function mmss(s){s=Math.floor(s);var h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60,p=function(n){return String(n).padStart(2,'0')};return(h?h+':':'')+p(m)+':'+p(x)}
+
+  function render(){
+    var v=fmt(S.speed),u=unit==='kmh'?'km/h':'mph';
+    $('num').textContent=v;$('cnum').textContent=v;
+    $('unit').textContent=u;$('cunit').textContent=u;
+    $('arc').setAttribute('stroke-dashoffset',String(100-Math.min(1,v/SCALE[unit])*100));
+    $('max').textContent=fmt(S.max);
+    $('rec').textContent=fmt(rec.v);$('recu').textContent=u;
+    $('recd').textContent=rec.d?'am '+new Date(rec.d).toLocaleDateString('de-DE'):'noch kein Rekord';
+    $('avg').textContent=fmt(S.moving>0?S.dist/S.moving:0);
+    var d=unit==='kmh'?S.dist/1000:S.dist/1609.344;
+    $('dist').textContent=d.toFixed(2).replace('.',',');
+    $('du').textContent=unit==='kmh'?'km':'mi';
+    $('time').textContent=mmss(S.moving);
+  }
+
+  function onPos(p){
+    var c=p.coords,t=p.timestamp/1000,cur={lat:c.latitude,lon:c.longitude,t:t},v=c.speed;
+    var good=!c.accuracy||c.accuracy<=30;
+    if(!good){say('GPS-Signal schwach (±'+Math.round(c.accuracy)+' m). Warte auf besseres Signal …');S.speed=0;render();return}
+    if(v==null||isNaN(v)||v<0){v=0;if(S.last){var d0=t-S.last.t;if(d0>=1&&d0<10)v=hav(S.last,cur)/d0}}
+    if(v>70)return; /* unmögliche Sprünge (über 250 km/h) verwerfen */
+    say('GPS aktiv · Genauigkeit ±'+Math.round(c.accuracy||0)+' m');
+    if(v<0.5)v=0;
+    S.speed=v;if(v>S.max)S.max=v;
+    if(v>rec.v){rec={v:v,d:Date.now()};saveRec()}
+    if(S.last){var dt=t-S.last.t;if(v>0&&dt>0&&dt<10&&good){S.dist+=hav(S.last,cur);S.moving+=dt}}
+    S.last=cur;
+    if(map){
+      var ll=[c.latitude,c.longitude];
+      if(!hasPos){acc.addTo(map);me.addTo(map);hasPos=true;if(view==='map')map.setView(ll,17)}
+      me.setLatLng(ll);acc.setLatLng(ll).setRadius(c.accuracy||10);
+      if(v>0&&good)track.addLatLng(ll);
+      if(follow&&view==='map')map.panTo(ll,{animate:true});
+    }
+    render();
+  }
+  function onErr(e){
+    var m={1:'Standortzugriff verweigert. Erlaube ihn in den Einstellungen.',2:'Position nicht verfügbar. Prüfe dein GPS-Signal.',3:'Zeitüberschreitung beim Abrufen der Position.'};
+    say(m[e.code]||'Unbekannter Fehler beim Abrufen der Position.',true);
+    if(e.code===1)stop();
+  }
+  async function lock(){try{if('wakeLock' in navigator)wake=await navigator.wakeLock.request('screen')}catch(e){}}
+  function start(){
+    if(!navigator.geolocation){say('Dieses Gerät unterstützt keine Standortabfrage.',true);return}
+    S.last=null;
+    watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+    $('go').textContent='Stopp';$('go').className='on';
+    say('Suche GPS-Signal …');lock();
+  }
+  function stop(){
+    if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+    if(wake){try{wake.release()}catch(e){}wake=null}
+    S.speed=0;S.last=null;
+    $('go').textContent='Start';$('go').className='';
+    render();
+  }
+  $('go').onclick=function(){watchId===null?start():stop()};
+  $('reset').onclick=function(){S.max=0;S.dist=0;S.moving=0;S.speed=0;S.last=null;if(track)track.setLatLngs([]);render()};
+  $('layer').onclick=function(){
+    if(!map)return;
+    if(isSat){map.removeLayer(satL);map.removeLayer(labL);osmL.addTo(map);isSat=false;this.textContent='Satellit'}
+    else{map.removeLayer(osmL);satL.addTo(map);labL.addTo(map);isSat=true;this.textContent='Straße'}
+  };
+  $('recdel').onclick=function(){if(confirm('Rekord wirklich löschen?')){rec={v:0,d:0};saveRec();render()}};
+  function setUnit(u){unit=u;$('u-kmh').setAttribute('aria-pressed',u==='kmh');$('u-mph').setAttribute('aria-pressed',u==='mph');render()}
+  $('u-kmh').onclick=function(){setUnit('kmh')};
+  $('u-mph').onclick=function(){setUnit('mph')};
+  $('t-tacho').onclick=function(){setView('tacho')};
+  $('t-map').onclick=function(){setView('map')};
+  $('center').onclick=function(){follow=true;$('center').style.display='none';if(hasPos)map.setView(me.getLatLng(),Math.max(map.getZoom(),17))};
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&watchId!==null)lock()});
+  render();
+})();
+</script>
+</body>
+</html>
